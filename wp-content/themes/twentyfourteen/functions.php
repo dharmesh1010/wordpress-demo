@@ -579,7 +579,7 @@ function custom_contact_form() {
                 'post_title' => wp_strip_all_tags($_POST['first_name']),
                 'post_content' => $_POST['description'],
                 'post_type' => 'contactus',
-                'post_author'   => 1,
+                'post_author' => 1,
                 'post_status' => 'publish'
             );
             //Save post into table
@@ -592,7 +592,6 @@ function custom_contact_form() {
             add_post_meta($post_id, 'terms', esc_attr($_POST['terms']), true);
             add_post_meta($post_id, 'gender', esc_attr($_POST['gender']), true);
             _e('<span style="color:green">Your form has been submitted successfully</span></br>');
-            
         }
     }
     // The Contact form
@@ -618,3 +617,115 @@ function custom_contact_form() {
 }
 
 add_shortcode('contact', 'custom_contact_form');
+
+/*
+ * Description :Wordpress comment form- Dharmesh Patel
+ */
+add_action('wp_ajax_save_comment', 'prefix_ajax_save_comment');
+add_action('wp_ajax_nopriv_save_comment', 'prefix_ajax_save_comment');
+
+function prefix_ajax_save_comment() {
+    if (empty($_POST['comment'])) {
+        echo '1';
+        exit;
+    }
+    // Handle request then generate response using WP_Ajax_Response
+    $args = array(
+        'comment_approved' => 1,
+        'post_ID' => $_POST['comment_post_ID']
+    );
+
+    $get_comment = get_comments($args);
+
+    if (count($get_comment) > 0) {
+        // Set flag for ajax call - error
+        echo '0';
+        exit;
+    } else {
+
+        $data = array(
+            'comment_post_ID' => $_POST['comment_post_ID'],
+            'comment_parent' => 0,
+            'comment_content' => esc_attr($_POST['comment']),
+            'user_id' => get_current_user_id(),
+            'comment_approved' => 1,
+        );
+
+        $comment_id = wp_insert_comment($data);
+
+        add_comment_meta($comment_id, 'title', esc_attr($_POST['title']));
+        add_comment_meta($comment_id, 'rating', esc_attr($_POST['rating']));
+
+        $comments = get_comments();
+        $title = get_comment_meta($comment_id, 'title', 'single');
+        $rating = get_comment_meta($comment_id, 'rating', 'single');
+        $comment = get_comment($comment_id);
+        $content = get_comment_text($comment_id);
+
+        $width = $rating * 20;
+        $rating = 'Rating <div class="stars">';
+        for ($i = 1; $i <= 5; $i++) {
+            $rating .= '<input type="radio"  id="star-' . $i . '" class="star-' . $i . '" name="rating" value = "' . $i . '">
+		<label for="star-' . $i . '" class="star-' . $i . '">' . $i . '</label>';
+        }
+        $rating .= '<span style = "width:' . $width . '%"></span></div>';
+        $comment_data = '<ol class = "comment-list"><div class ="comment-data">
+                            <div>Title: ' . $title . '</div></br>
+                            <div>' . $rating . '</div></br>
+                            <div>' . $content . '</div>
+                           </div></ol>';
+        // Set comment after ajax call
+        echo $comment_data;
+        exit;
+    }
+}
+
+function ajax_url() {
+    echo '<script type="text/javascript"> var ajaxurl = "' . admin_url('admin-ajax.php') . '"</script>';
+}
+
+add_action('wp_head', 'ajax_url');
+
+add_action('comment_form_logged_in_after', 'custom_fields');
+
+function custom_fields() {
+    echo "<div id = 'notification_msg'></div>";
+    echo '<p class="comment-form-title">' .
+    '<label for="title">' . __('Title') . '</label>' .
+    '<input id="title" name="title" type="text" size="30"  tabindex="5" /></p>';
+
+    echo 'Rating <div class="stars">';
+    for ($i = 1; $i <= 5; $i++) {
+        echo '<input type="radio"  id="star-' . $i . '" class="star-' . $i . '" name="rating" value = "' . $i . '">
+		<label for="star-' . $i . '" class="star-' . $i . '">' . $i . '</label>';
+    }
+    echo '<span></span></div>';
+}
+
+add_action('init', 'ajaxcomments_view');
+
+function ajaxcomments_view() {
+    wp_enqueue_script('ajaxcomments', get_template_directory_uri() . "/js/ajaxcomments.js", array('jquery'));
+}
+
+function custom_comment($comment, $args, $depth) {
+    $rating = get_comment_meta($comment->comment_ID, 'rating', 'single');
+    $width = $rating * 20;
+
+    $rating = 'Rating <div class="stars">';
+    for ($i = 1; $i <= 5; $i++) {
+        $rating .= '<input type="radio"  id="star-' . $i . '" class="star-' . $i . '" name="rating" value = "' . $i . '">
+		<label for="star-' . $i . '" class="star-' . $i . '">' . $i . '</label>';
+    }
+    $rating .= '<span style="width:' . $width . '%" ></span></div>';
+    ?>
+    <div class="comment-author vcard">
+        <?php printf(__('<cite class="fn">%s</cite> <span class="says">says:</span>'), get_comment_author_link()) ?>
+    </div>
+
+    <div>Title: <?php echo get_comment_meta($comment->comment_ID, 'title', 'single'); ?></div></br>
+
+    <form><div><?php echo $rating; ?></div></form></br>
+    <div>    <?php comment_text() ?> </div>
+    <?php
+}
